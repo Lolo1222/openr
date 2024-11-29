@@ -58,7 +58,11 @@ def _generate_fastchat(
         json=gen_params,
         stream=True,
     )
-    results = response.json()
+    try:
+        results = response.json()
+    except:
+        print(response)
+        results = response.json()
     output_token_lens = results["output_token_len"]
     cum_logps = results["cumulative_logprob"]
     avg_len_logps = [
