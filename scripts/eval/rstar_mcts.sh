@@ -1,5 +1,6 @@
+export PYTHONPATH=$(pwd)
 python reason/evaluation/evaluate.py \
-    --LM Qwen2.5-Math-1.5B-Instruct \
+    --LM mistral-7b-sft \
     --RM math-shepherd-mistral-7b-prm \
     --task_name rstar \
     --max_new_tokens 2048 \
@@ -12,5 +13,5 @@ python reason/evaluation/evaluate.py \
     --controller_addr http://0.0.0.0:28777 \
     --top_k 40 \
     --top_p 0.95 \
-    --temperature 0.8 \
+    --temperature 0.7 \
 #    --local

@@ -26,6 +26,7 @@ def _value_inference_fastchat(
         json=gen_params,
         stream=True,
     )
+    # print('value response is : ', response)
     results = response.json()
     value = results["value"]
     return value

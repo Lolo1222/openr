@@ -16,7 +16,7 @@ def load_dataset(dataset_path, mode):
     return dataset
 
 class MathEnv:
-
+    # Lolo1222: only used in train
     def __init__(self, rank, dataset_name, dataset_path, mode):
         
         self.rank = rank
@@ -32,7 +32,7 @@ class MathEnv:
         
         self.problem = None
         self.label = None
-        self.step_tag = "ки"
+        self.step_tag = "ки\n"
         self.current_state = None
 
     def reset(self):

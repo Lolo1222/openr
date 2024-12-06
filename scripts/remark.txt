@@ -1,0 +1,2 @@
+sh reason/llm_service/create_service_math_shepherd.sh
+sh scripts/eval/beam_search.sh 

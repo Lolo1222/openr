@@ -120,8 +120,9 @@ def math_equal(
         return False
 
     # 2. symbolic equal
-    reference = str(reference).strip()
-    prediction = str(prediction).strip()
+    # Lolo1222: normalize (, ), \\left, \\right
+    reference = str(reference).strip().replace('\\left(', '(').replace('\\right)', ')')
+    prediction = str(prediction).strip().replace('\\left(', '(').replace('\\right)', ')')
 
     ## pmatrix (amps)
     if "pmatrix" in prediction and not "pmatrix" in reference:

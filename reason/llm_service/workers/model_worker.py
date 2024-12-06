@@ -154,6 +154,8 @@ class ModelWorker(BaseModelWorker):
         for x in self.generate_stream_gate(params):
             pass
         stream_result = json.loads(x[:-1].decode())
+        # Debug
+        # print("stream_result: ", stream_result)
         # res['cumulative_logprob']
         ret = {}
         ret["text"] = [stream_result["text"]]

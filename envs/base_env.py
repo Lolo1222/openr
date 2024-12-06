@@ -145,6 +145,12 @@ class CoTEnv(BaseEnv):
                     self._legal_actions, api_completion_token = (
                         self.update_legal_actions()
                     )
+                    # Lolo1222: DEBUG
+                    print('*'*80)
+                    print(f"Initialize legal_actions")
+                    for i, action in enumerate(self._legal_actions):
+                        print(f"Candidate action {i}: {action}")
+                        # print(f"Candidate action {i}: {action["action"]}, probability: {action["prob"]}")
                     break
                 except NoLegalActionException as e:
                     if cnt == 3:
@@ -276,6 +282,7 @@ class CoTEnv(BaseEnv):
             terminated = True
         elif self._next_state_terminated[self.action_history[-1]]:
             terminated = True
+        # Lolo1222: TBD: Should be examined by 'The answer'
         elif self.sep not in self.action_history[-1]:
             # This is because the output is stopped by eos
             terminated = True

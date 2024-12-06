@@ -1,3 +1,4 @@
+export PYTHONPATH=$(pwd)
 python reason/evaluation/evaluate.py \
     --LM Qwen2.5-Math-1.5B-Instruct \
     --RM checkpoint-6898 \

@@ -6,13 +6,13 @@ import argparse
 from peft import PeftModel, PeftConfig
 from peft import get_peft_model, LoraConfig, TaskType
 # Ensure bitsandbytes is available for 8-bit quantization
-import bitsandbytes as bnb
+# import bitsandbytes as bnb
 from sklearn.metrics import roc_auc_score, log_loss, accuracy_score
 
 from torch.nn import BCEWithLogitsLoss
 from transformers import DataCollatorWithPadding
-
-
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "5"
 parser = argparse.ArgumentParser()
 parser.add_argument("--per_device_train_batch_size", type=int, default=1)
 parser.add_argument("--per_device_eval_batch_size", type=int, default=1)
@@ -28,6 +28,7 @@ bad_token = '-'
 step_tag = 'ки'
 
 model_path = "../../models/math_stepherd_prm/"
+# model_path = "/data2/OpenLLMs/peiyi9979/mistral-7b-sft"
 
 # tokenizer = AutoTokenizer.from_pretrained(model_path)
 

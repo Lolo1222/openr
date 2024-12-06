@@ -358,11 +358,11 @@ class SearchTree:
                     action, node = self._select_child(node, env_copy)
                 else:
                     # choose rollout policy
-                    if select_by_prior:
+                    if select_by_prior: # Lolo1222: Seems you always need to set it to False.
                         # select with prior probability
                         action, node = self._select_by_prior(node, env_copy)
                     else:
-                        # select with highest value, since visit_count = 0 in self.ucb 
+                        # select with highest value, since visit_count = 0 in self.ucb
                         #  will select node with highest value
                         action, node = self._select_child(node, env_copy)
 
@@ -401,6 +401,9 @@ class SearchTree:
                 "tree_completion_tokens": self._completion_tokens,
             }
 
+            # Lolo1222: DEBUG
+            print('*'*80)
+            print(f"\ntraj_data is : {traj_data}")
             traj_list.append(traj_data)
 
             # reset api_call_completion_tokens
@@ -623,8 +626,13 @@ class SearchTree:
         child = None
         best_score = -9999999
 
+        # Lolo1222: DEBUG
+        print('*'*80)
+        print("Each ucb_score of Child nodes are:\n")
         for action_tmp, child_tmp in node.children.items():
             ucb_score = self._ucb_score(node, child_tmp)
+            # Lolo1222: DEBUG
+            print(f"ucb_score, child_tmp: {ucb_score}, {child_tmp}")
             score = ucb_score
             if score > best_score:
                 best_score = score
@@ -633,6 +641,11 @@ class SearchTree:
 
         if child is None:
             child = node  # child==None, node is leaf node in play_with_bot_mode.
+            # Lolo1222: DEBUG
+            print(f"child==None, node is leaf node.")
+        # Lolo1222: DEBUG
+        else:
+            print(f"Choose child: {child}")
 
         return action, child
 
@@ -677,7 +690,7 @@ class SearchTree:
             leaf_value = node._initial_value
             assert len(simulate_env.legal_actions) > 0
             prms = reward_fn(
-                [
+                question_answer_pairs=[
                     (
                         simulate_env.question,
                         simulate_env.answer + x["action"],
@@ -688,19 +701,20 @@ class SearchTree:
             child_values = []
             # PRM get last r as single reward
             for act, rs in zip(simulate_env.legal_actions, prms):
-                if len(simulate_env.action_history) + 1 != len(rs):
-                    logger.warning(
-                        "PRM value length not match with action history. \
-                            len(prm)={}, len(act_hist)={} s:\n {}\n\na: \n{}\nrs:{}".format(
-                            len(prms),
-                            len(simulate_env.action_history),
-                            text_state,
-                            act,
-                            rs,
-                        )
-                    )
+                # Lolo1222: delete this warning since we did not filter out only step end of the prm score.
+                # if len(simulate_env.action_history) + 1 != len(rs):
+                #     logger.warning(
+                #         "PRM value length not match with action history. \
+                #             len(prm)={}, len(act_hist)={} s:\n {}\n\na: \n{}\nrs:{}".format(
+                #             len(prms),
+                #             len(simulate_env.action_history),
+                #             text_state,
+                #             act,
+                #             rs,
+                #         )
+                #     )
                     # raise RuntimeError("Tokenizer problems")
-                    child_values.append(0.0)
+                    # child_values.append(0.0)
 
                 if len(rs) == 0:
                     logger.warning(
@@ -718,6 +732,7 @@ class SearchTree:
                     # child_values.append(act['prob'])
 
         assert len(node.children) == 0
+        # Lolo1222: Generate child nodes for current node and detemine whether it's a terminate_node.
         for i, action_dict in enumerate(simulate_env.legal_actions):
             action, prob = action_dict["action"], action_dict["prob"]
 
