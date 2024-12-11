@@ -17,6 +17,7 @@ import pdb
 from tqdm import tqdm
 import heapq
 from loguru import logger
+from reason.guided_search.utils import is_similar_str_pair
 
 
 class Node(object):
@@ -70,7 +71,12 @@ class Node(object):
         """
         self._visit_count += 1
         self._value_sum += value
-
+        # Lolo1222: for merge similar node
+        # # 重新计算Q值
+        # self.q_value = self.value_sum / self.visit_count
+        # # 重新计算PUCT值
+        # self.prm_value = self.q_value + self.c_puct * self.prior * \
+        #                 math.sqrt(self.parent.visit_count) / (1 + self.visit_count)
     def update_recursive(self, leaf_value: float, mcts_mode: str) -> None:
         """
         Overview:
@@ -144,7 +150,7 @@ class Node(object):
 
         rets = {"children": childrens, "info": self.get_info()}
         return rets
-    
+
     def __str__(self) -> str:
         if self.is_root():
             return "root"
@@ -193,14 +199,41 @@ class LanguageNode(Node):
         else:
             info_dict["text_state"] = self.text_state
         return info_dict
-    
+
     def __str__(self):
         if self.is_root():
             return "root: {}".format(self.text_state)
-        else: 
+        else:
             return "action: {}, value: {:.3f}, prior: {:.3f}".format(
                 self.last_action, self.value, self.prior_p
             )
+        
+    # Lolo1222: for merge similar node
+    def merge_node(self, merged_node: Node):
+        # 1. 计算合并后的value_sum
+        # 由于_value_sum是protected,我们通过public的value和visit_count来计算
+        self._value_sum += merged_node.value * merged_node.visit_count
+        
+        # 2. 修改visit_count的更新 
+        self._visit_count += merged_node.visit_count
+        
+        # 3. 可选的属性更新
+        if hasattr(self, 'prm_value') and self.prm_value is not None:
+            self.prm_value = (self.prm_value * self._visit_count + merged_node.prm_value * merged_node.visit_count) / (self._visit_count + merged_node.visit_count)
+        
+        if hasattr(self, 'num_generated_token') and self.num_generated_token is not None:
+            self.num_generated_token += merged_node.num_generated_token
+            
+        if hasattr(self, 'has_collected_token_num'):
+            self.has_collected_token_num |= merged_node.has_collected_token_num
+        
+        # 4. prior概率的更新
+        self.prior_p += merged_node.prior_p
+        self.prior_p_ori += merged_node.prior_p_ori
+        
+        # 5. terminated状态的更新 
+        self._terminated |= merged_node.terminated  # 使用public的terminated属性
+
 
 
 def get_root(node: Node):
@@ -255,6 +288,7 @@ class SearchTree:
         for child in node.children.values():
             self.clear_node(child)
 
+# Lolo1222: never used
     def get_next_action(
         self,
         simulate_env: Type[CoTEnv],
@@ -340,6 +374,7 @@ class SearchTree:
         if self.root is None:
             root = LanguageNode(text_state=simulate_env.get_state())
             self._expand_leaf_node(root, simulate_env, reward_model_fn)
+            self._merge_leaf_node(root)
             self.root = root
 
         traj_list = []
@@ -347,24 +382,31 @@ class SearchTree:
         # TODO(ziyu): split with 1. select 2. expand 3. rollout 4. backprop
         #  for here is split the for loop with select and rollout
         #  so that arbitrary rollout function can be used here.
-        
+
         for i_path in range(num_path):
             node = self.root
             env_copy = simulate_env.copy()
             done = False
             while not done:
+                # Lolo1222: TBD
+                # need to add a simulate paramter and write below into for loop
+                # Set this simulate paramter into config.args
                 if node.visit_count > 0:
                     # if node is visited, select the child with the highest UCB score
                     action, node = self._select_child(node, env_copy)
                 else:
                     # choose rollout policy
-                    if select_by_prior: # Lolo1222: Seems you always need to set it to False.
+                    if (
+                        select_by_prior
+                    ):  # Lolo1222: Seems you always need to set it to False.
                         # select with prior probability
                         action, node = self._select_by_prior(node, env_copy)
                     else:
                         # select with highest value, since visit_count = 0 in self.ucb
                         #  will select node with highest value
                         action, node = self._select_child(node, env_copy)
+
+                # Lolo1222: TBD: selected node visit_count += 1
 
                 # sync terminated flag here
                 # XXX(ziyu): find a more clean way
@@ -380,9 +422,23 @@ class SearchTree:
 
                 if not done and node.is_leaf():
                     self._expand_leaf_node(node, env_copy, reward_model_fn)
+                    self._merge_leaf_node(node)
+                    # Lolo1222: TBD
+                    # 1. get current node.child s each value
+                    # 2. assign new value to it
+                    # Notice: how to update value, need get visit_count
 
                 # record api_tokens, if not expand, info["api_completion_token"] is 0
                 api_call_completion_tokens += info["api_completion_token"]
+
+                # Lolo1222: TBD
+                # Finish for loop
+                # Finish one level choose
+                # NONONONO
+                # For level choose loop:
+                #    For one mcts search loop:
+                #       choose one node
+                #       node = node.chosen child
             else:
                 if node.visit_count > 0:
                     leaf_value = node.value
@@ -402,7 +458,7 @@ class SearchTree:
             }
 
             # Lolo1222: DEBUG
-            print('*'*80)
+            print("*" * 80)
             print(f"\ntraj_data is : {traj_data}")
             traj_list.append(traj_data)
 
@@ -424,6 +480,7 @@ class SearchTree:
             beam_size: beam_size
             max_step: The maximum number of steps to search.
             reward_model_fn: The reward model function to evaluate the state.
+        Lolo1222: top_k_nodes are selected by reward_model_fn
         """
         api_call_completion_tokens = 0
         _, info = simulate_env.reset(update_legal_action=True)
@@ -627,7 +684,7 @@ class SearchTree:
         best_score = -9999999
 
         # Lolo1222: DEBUG
-        print('*'*80)
+        print("*" * 80)
         print("Each ucb_score of Child nodes are:\n")
         for action_tmp, child_tmp in node.children.items():
             ucb_score = self._ucb_score(node, child_tmp)
@@ -658,6 +715,36 @@ class SearchTree:
         chosen_node = node.children[chosen_action]
 
         return chosen_action, chosen_node
+
+
+    # Lolo1222: for merge similar node
+    def _merge_leaf_node(self, node: LanguageNode, metric='levenshtein_ratio'):
+        # Lolo1222: TBD
+        # get similar node pairs;
+        # merge value and possibility
+        # delete one node
+        # node.children={"action_text1": node1, "action_text2": node2, ...}
+
+        keys = list(node.children.keys())
+        merged = set()  # 用于记录已经合并的键
+
+        for i in range(len(keys)):
+            if keys[i] in merged:
+                continue
+            for j in range(i + 1, len(keys)):
+                if keys[j] in merged:
+                    continue
+                key1 = keys[i]
+                key2 = keys[j]
+                if is_similar_str_pair(key1, key2,metric="model_cosine", threshold=0.98):
+                    # Merge key2 into key1
+                    node.children[key1].merge_node(node.children[key2])
+                    print(f"Merge key2 into key1! key1=<{key1}>, key2=<{key2}>")
+                    merged.add(key2)
+        
+        # 移除已经合并的键
+        for key in merged:
+            del node.children[key]
 
     def _expand_leaf_node(
         self,
@@ -713,8 +800,8 @@ class SearchTree:
                 #             rs,
                 #         )
                 #     )
-                    # raise RuntimeError("Tokenizer problems")
-                    # child_values.append(0.0)
+                # raise RuntimeError("Tokenizer problems")
+                # child_values.append(0.0)
 
                 if len(rs) == 0:
                     logger.warning(
@@ -728,7 +815,7 @@ class SearchTree:
                     child_values.append(rs[-1])
                     # # prm-min
                     # child_values.append(min(rs))
-                    # # prob-prm
+                     # # prob-prm
                     # child_values.append(act['prob'])
 
         assert len(node.children) == 0
@@ -759,7 +846,7 @@ class SearchTree:
             print_rank_0(
                 "Prune all current children at node {}".format(node.last_action)
             )
-        
+
         # collect num tokens
         if not node.has_collected_token_num:
             self._completion_tokens += sum(
@@ -854,15 +941,16 @@ class SearchTree:
         obj = cls(cfg)
         obj.root = root_node
         return obj
-    
+
     def draw_tree(self):
         # Not tested yet
         root = self.root
-        assert root, 'Root node is None'
+        assert root, "Root node is None"
+
         def draw_node(node, depth):
-            print('|' + '-' * depth + str(node))
+            print("|" + "-" * depth + str(node))
             for child in node.children.values():
                 draw_node(child, depth + 1)
-        
+
         print(f"\n---------Expanded Tree---------")
         draw_node(self.root)
