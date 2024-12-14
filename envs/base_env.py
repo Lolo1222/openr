@@ -171,6 +171,11 @@ class CoTEnv(BaseEnv):
                 try:
                     self._legal_actions, api_completion_token = self.update_legal_actions()
                     info["api_completion_token"] = api_completion_token
+                    # Lolo1222: DEBUG
+                    print('*'*80)
+                    print(f"Next legal_actions")
+                    for i, action in enumerate(self._legal_actions):
+                        print(f"Candidate action {i}: {action}")
                     break
                 except NoLegalActionException as e:
                     if cnt == 3:

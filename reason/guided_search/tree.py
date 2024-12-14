@@ -17,7 +17,7 @@ import pdb
 from tqdm import tqdm
 import heapq
 from loguru import logger
-from reason.guided_search.utils import is_similar_str_pair
+# from reason.guided_search.utils import is_similar_str_pair
 
 
 class Node(object):
@@ -31,8 +31,9 @@ class Node(object):
     ) -> None:
         self._parent = parent
         self._children = {}
-        self._visit_count = 0
-        self._value_sum = 0
+        # XXX(Lolo1222): set visit_count to 1 for new child node.
+        self._visit_count = 1
+        self._value_sum = initial_value
         self.prior_p = prior_p
         self.prior_p_ori = prior_p
 
@@ -57,9 +58,9 @@ class Node(object):
         Returns:
             - output (:obj:`Int`): Current value, used to compute ucb score.
         """
-        if self._visit_count == 0:
-            # if not visited, return the initial value
-            return self._initial_value
+        # if self._visit_count == 1:
+        #     # if not visited, return the initial value
+        #     return self._initial_value
         return self._value_sum / self._visit_count
 
     def update(self, value: float) -> None:
@@ -183,6 +184,11 @@ class LanguageNode(Node):
         self.num_generated_token = num_generated_token
         self.has_collected_token_num = False
 
+    # XXX(Lolo1222): Get initial_value:
+    @property
+    def initial_value(self):
+        return self._initial_value
+    
     def get_path(self):
         ans = []
         node = self
@@ -245,7 +251,7 @@ def get_root(node: Node):
 class SearchTree:
     """
     Overview:
-        MCTS search process.
+        MCTS search process, both simple_mcts and vanila_mcts are implemented.
     """
 
     def __init__(self, cfg) -> None:
@@ -274,6 +280,7 @@ class SearchTree:
             "mask_non_terminal_node_value", False
         )
 
+        #XXX(Lolo1222): always assume init_critic_value is True.
         self._init_critic_value = self._cfg.get("init_critic_value", True)
 
         self._completion_tokens = 0
@@ -360,7 +367,68 @@ class SearchTree:
         if return_tree:
             return action, action_probs, root
         return action, action_probs
+    
+    # XXX(Lolo1222): for simple mcts
+    def get_next_step(
+        self,
+        node: Node,
+        simulate_env: Type[CoTEnv],
+        reward_fn: Optional[Callable] = None,
+        temperature: int = 1.0,
+        sample: bool = True,
+        return_tree=False,
+    ) -> Tuple[int, List[float]]:
+        """
+        Overview:
+            calculate the move probabilities based on visit counts at the given node.
+        Arguments:
+            - node (:obj:`Class Node`): Current node when performing mcts search, seen as root, always assume expanded.
+            - simulate_env (:obj:`Class BaseGameEnv`): The class of simulate env.
+            - reward_fn (:obj:`Function`): The Callable to compute the PRM values.
+            - temperature (:obj:`Int`): Temperature is a parameter that controls the "softness" of the probability distribution.
+            - sample (:obj:`Bool`): The value of the node.
+        Returns:
+            - action (:obj:`Bool`): Select the action with the most visits as the final action.
+            - action_probs (:obj:`List`): The output probability of each action.
+        """
+        if sample:
+            self._add_exploration_noise(node)
 
+        for n in range(self._num_simulations):
+            # DEBUG
+            print("Simulate", n)
+            simulate_env_copy = simulate_env.copy()
+            simulate_env_copy.battle_mode = simulate_env_copy.mcts_mode
+            # The simulate tree is store through node. After one simulation, the 'node' may be a middle node.
+            self._simulate_4simple_mcts(node, simulate_env_copy, reward_fn)
+
+        action_visits = []
+        for action_dict in simulate_env.legal_actions:
+            # 'action' is the text_state of the next step
+            action = action_dict["action"]
+            if action in node.children:
+                action_visits.append((action, node.children[action].visit_count))
+            else:
+                action_visits.append((action, 0))
+
+        actions, visits = zip(*action_visits)
+        action_probs = nn.functional.softmax(
+            1.0
+            / temperature
+            * np.log(torch.as_tensor(visits, dtype=torch.float32) + 1e-10),
+            dim=0,
+        ).numpy()
+        if sample:
+            action = np.random.choice(actions, p=action_probs)
+            self.reset_prior(node)
+        else:
+            action = actions[np.argmax(action_probs)]
+
+        if return_tree:
+            return action, action_probs, self.root
+        return action, action_probs
+
+    # Lolo1222: Best of N (step level)
     def vanila_mcts(
         self,
         simulate_env: Type[CoTEnv],
@@ -393,18 +461,18 @@ class SearchTree:
                 # Set this simulate paramter into config.args
                 if node.visit_count > 0:
                     # if node is visited, select the child with the highest UCB score
-                    action, node = self._select_child(node, env_copy)
+                    action, node = self._select_child(node)
                 else:
                     # choose rollout policy
                     if (
                         select_by_prior
                     ):  # Lolo1222: Seems you always need to set it to False.
                         # select with prior probability
-                        action, node = self._select_by_prior(node, env_copy)
+                        action, node = self._select_by_prior(node)
                     else:
                         # select with highest value, since visit_count = 0 in self.ucb
                         #  will select node with highest value
-                        action, node = self._select_child(node, env_copy)
+                        action, node = self._select_child(node)
 
                 # Lolo1222: TBD: selected node visit_count += 1
 
@@ -453,6 +521,63 @@ class SearchTree:
                 "path_idx": i_path,
                 "text": env_copy.answer,
                 "value": leaf_value,
+                "api_completion_tokens": api_call_completion_tokens,
+                "tree_completion_tokens": self._completion_tokens,
+            }
+
+            # Lolo1222: DEBUG
+            print("*" * 80)
+            print(f"\ntraj_data is : {traj_data}")
+            traj_list.append(traj_data)
+
+            # reset api_call_completion_tokens
+            api_call_completion_tokens = 0
+
+        return traj_list
+    
+    def simple_mcts(
+        self,
+        simulate_env: Type[CoTEnv],
+        num_path: int,
+        reward_model_fn: Optional[Callable] = None,
+        select_by_prior: bool = False,
+    ) -> List[Dict]:
+        """Notice: DONT calculate true api_call_completion_tokens"""
+        api_call_completion_tokens = 0
+        _, info = simulate_env.reset(update_legal_action=True)
+        api_call_completion_tokens += info["api_completion_token"]
+        if self.root is None:
+            root = LanguageNode(text_state=simulate_env.get_state())
+            self._expand_leaf_node(root, simulate_env, reward_model_fn)
+            self.root = root
+
+        traj_list = []
+
+        for i_path in range(num_path):
+            node = self.root
+            env_copy = simulate_env.copy()
+           
+            for i_step in range(env_copy.config["max_length"]):
+                step_text, _ = self.get_next_step(node, env_copy, reward_model_fn, temperature=1.0, sample=False, return_tree=False )
+                env_copy._next_state_terminated = {}
+                env_copy._next_state_terminated[step_text] = node.children[step_text].terminated
+
+                _, _, terminated, truncated, info = env_copy.step(
+                    step_text, update_legal_action=True
+                )
+
+                done = terminated or truncated
+                if done:
+                    break
+                else:
+                    node = LanguageNode(text_state=env_copy.get_state())
+                    self._expand_leaf_node(node, env_copy, reward_model_fn)
+
+
+            traj_data = {
+                "path_idx": i_path,
+                "text": env_copy.answer,
+                "value": node.value,
                 "api_completion_tokens": api_call_completion_tokens,
                 "tree_completion_tokens": self._completion_tokens,
             }
@@ -571,6 +696,7 @@ class SearchTree:
         winner = None
         done = False
         while not node.is_leaf():
+            # XXX(Lolo1222): action, node = self._select_child(node)
             action, node = self._select_child(node, simulate_env)
             _, _, terminated, truncated, info = simulate_env.step(
                 action, update_legal_action=(node.is_leaf() and node.visit_count == 1)
@@ -666,8 +792,91 @@ class SearchTree:
             # thus we add the negative when call update_recursive().
             node.update_recursive(-leaf_value, simulate_env.mcts_mode)
 
+    # Lolo1222: for simple MCTS
+    def _simulate_4simple_mcts(
+        self,
+        node: Node,
+        simulate_env: Type[CoTEnv],
+        reward_fn: Optional[Callable] = None,
+    ) -> None:
+        """
+        Overview:
+            Run a single playout from the given node to its children's leaf nodes, expand leaf nodes and getting PRM values and propagating them back through its parents.
+            State is modified in-place, so a deepcopy must be provided.
+        Arguments:
+            - node (:obj:`Class Node`): Current node, always assume expanded or middle node.
+            - simulate_env (:obj:`Class BaseGameEnv`): The class of simulate env, it will be modified in-place.
+            - reward_fn (:obj:`Function`): The Callable to compute the PRM values of each child.
+        """
+        winner = None
+        done = False
+        # 'node' is leaf or middle node, leaf->first simulation, middle->after several simulations
+        # while not node.is_leaf() is True, the node is middle node, we first down to a leaf node.
+        while not node.is_leaf() and not done:
+            action, node = self._select_child(node)
+            # See whether this action is terminated or truncated.
+            simulate_env._next_state_terminated = {}
+            assert node.last_action == action
+            simulate_env._next_state_terminated[action] = node.terminated
+
+            _, _, terminated, truncated, info = simulate_env.step(
+                action, update_legal_action=(node.is_leaf() and node.visit_count == 1)
+            )
+            done = terminated or truncated
+            if not done and node.is_leaf():
+                self._expand_leaf_node(node, simulate_env, reward_fn)
+                # XXX(Lolo1222): If don't break, it will expand the tree until get a terminal node, namely rollout.
+                break
+
+        if not done:
+            # means we reach a leaf node, and we've expanded it.
+            # we need to calculate the leaf_value of this node.
+            for action, child in node.children.items():
+                # mcts_mode should be "play_with_bot_mode". Need to check simulate_env.mcts_mode.
+                # print(child.value, child.visit_count)
+                node.update_recursive(child.value, mcts_mode="play_with_bot_mode")
+        else:
+            # means we reach a terminal node.
+            # Dont need to backpropagate node's children's value.
+            # Only backpropagate node's value.
+            value = reward_fn((simulate_env.question, simulate_env.answer))[-1]
+            node.set_as_terminate_node()
+
+            # value = node.value
+            # value = reward_fn((simulate_env.question, simulate_env.answer+node.text_state or last_action)).item()
+            node.update_recursive(value, mcts_mode="play_with_bot_mode")
+
+    def _rollout_and_backprop(self, node: Node, simulate_env: Type[CoTEnv], reward_fn: Optional[Callable] = None, simulate_child_num: int = 1):
+        """For simple MCTS
+        Use prm value to estimate rollout value.
+        Need to approx each child's value of the give node.
+        Simulate a child selected to Pseudo-expand for updating value by the prior probability """
+
+        
+        Pseudo_value = {}
+        # Improve:Pseudo-expand for each child
+
+        for i in range(simulate_child_num):
+            action, child = self._select_by_prior(node)
+            if action in Pseudo_value.keys():
+                node.update(Pseudo_value[action])
+                continue
+            else:
+                env_copy = simulate_env.copy()
+
+                _, _, terminated, truncated, info = env_copy.step(
+                    action, update_legal_action=(node.is_leaf())
+                )        
+                self._expand_leaf_node(child, env_copy, reward_fn)
+                for action, child in node.children.items():
+                    child_value = self._expand_leaf_node(child, env_copy, reward_fn)
+
+
+        
+        # node.update_recursive(leaf_value, env_copy.mcts_mode)
+
     def _select_child(
-        self, node: LanguageNode, simulate_env: Type[CoTEnv]
+        self, node: LanguageNode
     ) -> Tuple[Union[int, float], Node]:
         """
         Overview:
@@ -684,12 +893,12 @@ class SearchTree:
         best_score = -9999999
 
         # Lolo1222: DEBUG
-        print("*" * 80)
-        print("Each ucb_score of Child nodes are:\n")
+        # print("*" * 80)
+        # print("Each ucb_score of Child nodes are:")
         for action_tmp, child_tmp in node.children.items():
             ucb_score = self._ucb_score(node, child_tmp)
             # Lolo1222: DEBUG
-            print(f"ucb_score, child_tmp: {ucb_score}, {child_tmp}")
+            # print(f"ucb_score, child_tmp: {ucb_score}, {child_tmp}")
             score = ucb_score
             if score > best_score:
                 best_score = score
@@ -699,14 +908,14 @@ class SearchTree:
         if child is None:
             child = node  # child==None, node is leaf node in play_with_bot_mode.
             # Lolo1222: DEBUG
-            print(f"child==None, node is leaf node.")
+            print(f"Error:child==None, node is leaf node.")
         # Lolo1222: DEBUG
         else:
             print(f"Choose child: {child}")
 
         return action, child
 
-    def _select_by_prior(self, node: Node, simulate_env):
+    def _select_by_prior(self, node: Node):
         data_tmp = [
             (x_action, x_node.prior_p) for x_action, x_node in node.children.items()
         ]
@@ -803,7 +1012,7 @@ class SearchTree:
                 # raise RuntimeError("Tokenizer problems")
                 # child_values.append(0.0)
 
-                elif len(rs) == 0:
+                if len(rs) == 0:
                     logger.warning(
                         "Empty PRM value for: \nState: \n{} \naction: \n{}, will be set to 0.0".format(
                             text_state, act
@@ -828,6 +1037,7 @@ class SearchTree:
             else:
                 # XXX(ziyu): consider turn off this branch, i.e. always assume
                 #  `self._init_critic=True`, since with LLM
+                print("Error: _init_critic_value is False.")
                 child_value = 0.0
 
             node.children[action] = LanguageNode(

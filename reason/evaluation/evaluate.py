@@ -209,8 +209,18 @@ if __name__ == "__main__":
             num_path=config.num_sequence,
         )
         solver_fn = partial(vanila_mcts, method_config, gen_config)
+    elif config.method == "simple_mcts":
+        method_config = SimpleMCTSConfig(
+            task_name=config.task_name,
+            tree_max_depth=config.tree_max_depth,
+            tree_max_width=config.tree_max_width,
+            select_by_prior=False,
+            num_path=config.num_sequence,
+        )
+        solver_fn = partial(simple_mcts, method_config, gen_config)
     elif config.method == "rstar_mcts":
-        method_config = VanilaMCTSConfig(
+        # XXX(Lolo1222): Note! Why this is not RStarMCTSConfig?
+        method_config = RStarMCTSConfig(
             task_name=config.task_name,
             tree_max_depth=config.tree_max_depth,
             tree_max_width=config.tree_max_width,

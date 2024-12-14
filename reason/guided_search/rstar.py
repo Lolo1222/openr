@@ -36,8 +36,10 @@ class RstarSearchTree(SearchTree):
         )  # total reward of each node
         self.weight_scheduler = "const"
         self.mcts_exploration_weight = 2.0
+        # XXX(Lolo1222): What's max_depth_allowed and why is it written?
         self.max_depth_allowed = 5
-        self.show_tree_expansion = True
+        # XXX(Lolo1222): temporary disable show tree expansion
+        self.show_tree_expansion = False
 
     @override
     def _select_child(
@@ -131,7 +133,9 @@ class RstarSearchTree(SearchTree):
         model_all_solutions = []
         model_rollout_nodes = []
 
-        for i_path in tqdm(range(num_path), desc=f"Running {num_path} MCTS paths"):
+        # XXX(Lolo1222): temporary disable tqdm
+        # for i_path in tqdm(range(num_path), desc=f"Running {num_path} MCTS paths"):
+        for i_path in range(num_path):
             node = self.root
             env_copy = simulate_env.copy()
             done = False

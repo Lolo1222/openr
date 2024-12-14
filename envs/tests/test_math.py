@@ -39,12 +39,12 @@ if __name__ == "__main__":
                 tree_max_depth=50,
                 tree_max_width=4,
                 select_by_prior=False,
-                num_path=2,
+                num_path=1,
             )    
     _, ds = get_train_test_dataset()
     print(len(ds))
-    print(ds[0])
-    problem = ds[0]
+    print(ds[2])
+    problem = ds[2]
     lm_call = VLLMRemoteCaller("mistral-7b-sft", "http://0.0.0.0:28777")
     env = Env(
         config={
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     rm_call_fn = functools.partial(rm_call, lm_step_tag=lm_call.lm_step_tag)
     traj_list = search_tree.vanila_mcts(
         simulate_env=env,
-        num_path=2,
+        num_path=1,
         reward_model_fn=rm_call_fn,
         select_by_prior=False
     )

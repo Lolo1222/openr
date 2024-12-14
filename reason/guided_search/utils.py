@@ -2,7 +2,7 @@ from Levenshtein import distance
 from sentence_transformers import SentenceTransformer, util
 
 # model = SentenceTransformer('/data2/OpenLLMs/sentence-transformers/paraphrase-MiniLM-L6-v2')
-model = SentenceTransformer('/data2/OpenLLMs/math-similarity/Bert-MLM_arXiv-MP-class_zbMath')
+# model = SentenceTransformer('/data2/OpenLLMs/math-similarity/Bert-MLM_arXiv-MP-class_zbMath')
 def compute_similarity(sentences_pair):
     embeddings = model.encode(sentences_pair)
     embedding_1= model.encode(sentences_pair[0], convert_to_tensor=True)

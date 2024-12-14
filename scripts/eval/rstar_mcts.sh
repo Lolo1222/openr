@@ -13,5 +13,4 @@ python reason/evaluation/evaluate.py \
     --controller_addr http://0.0.0.0:28777 \
     --top_k 40 \
     --top_p 0.95 \
-    --temperature 0.7 \
-#    --local
+    --temperature 0.7

@@ -134,34 +134,48 @@ class MathEvaluator:
         return problem_inst, result, output
 
     def analyze_output(self, problem_inst: Dict[str, str], gen_answers: List[str]):
-        extracted_groundtruth = self._task.extract_groundtruth(problem_inst["answer"])
-
-        if len(gen_answers) > 1:
-            input_list = [(problem_inst["question"], txt) for txt in gen_answers]
-            # XXX(ziyu): for tree search methods with value_fn, should not call rm 
-            #  to compute it again
-            value_list = self.rm_call(input_list, lm_step_tag=self.lm_call.lm_step_tag)
-        else:
-            value_list = [[0]]
-        output_list = [
-            {"path_idx": i, "text": txt, "value": v}
-            for i, (txt, v) in enumerate(zip(gen_answers, value_list))
-        ]
-        res = {
-            agg_method: judge_ans(
-                problem_inst["question"],
-                extracted_groundtruth,
-                gen_answers,
-                value_list,
-                agg_method,
-                self._task.extract_answer,
-                self._task.judge_correct,
-            )
-            for agg_method in (
-                CHOSEN_AGGR_METHODS if len(gen_answers) > 1 else [MAJORITY_VOTE]
-            )
-        }
-        return res, output_list
+        try:
+            extracted_groundtruth = self._task.extract_groundtruth(problem_inst["answer"])
+            
+            if len(gen_answers) > 1:
+                input_list = [(problem_inst["question"], txt) for txt in gen_answers]
+                # XXX(ziyu): for tree search methods with value_fn, should not call rm 
+                #  to compute it again
+                # XXX(Lolo1222): Note! what is lm_step_tag?                
+                try:
+                    value_list = self.rm_call(input_list, lm_step_tag=self.lm_call.lm_step_tag)
+                except Exception as e:
+                    print(f"Warning: Error in reward model call: {e}")
+                    value_list = [[0] for _ in gen_answers]
+            else:
+                value_list = [[0]]
+                
+            output_list = [
+                {"path_idx": i, "text": txt, "value": v}
+                for i, (txt, v) in enumerate(zip(gen_answers, value_list))
+            ]
+            
+            res = {}
+            for agg_method in (CHOSEN_AGGR_METHODS if len(gen_answers) > 1 else [MAJORITY_VOTE]):
+                try:
+                    res[agg_method] = judge_ans(
+                        problem_inst["question"],
+                        extracted_groundtruth,
+                        gen_answers,
+                        value_list,
+                        agg_method,
+                        self._task.extract_answer,
+                        self._task.judge_correct,
+                    )
+                except Exception as e:
+                    print(f"Warning: Error in aggregation method {agg_method}: {e}")
+                    res[agg_method] = False
+                    
+            return res, output_list
+            
+        except Exception as e:
+            print(f"Error processing output: {e}")
+            return {"majority_vote": False}, []
 
 
 @ray.remote
