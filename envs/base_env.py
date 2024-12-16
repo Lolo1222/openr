@@ -7,7 +7,10 @@ import torch
 from distributed.utils import print_with_rank
 from transformers import PreTrainedTokenizer
 from reason.inference.lm_call import LMCallingConfig, ConcatedLMGenResult
+import logging
 
+# 获取全局 logger
+logger = logging.getLogger('reason.evaluation.evaluate')
 INVALID_ANS = "[invalid]"
 
 
@@ -146,11 +149,10 @@ class CoTEnv(BaseEnv):
                         self.update_legal_actions()
                     )
                     # Lolo1222: DEBUG
-                    print('*'*80)
-                    print(f"Initialize legal_actions")
+                    logger.debug('*'*80)
+                    logger.debug(f"Initialize legal_actions")
                     for i, action in enumerate(self._legal_actions):
-                        print(f"Candidate action {i}: {action}")
-                        # print(f"Candidate action {i}: {action["action"]}, probability: {action["prob"]}")
+                        logger.debug(f"Candidate action {i}: {action}")
                     break
                 except NoLegalActionException as e:
                     if cnt == 3:
@@ -172,10 +174,10 @@ class CoTEnv(BaseEnv):
                     self._legal_actions, api_completion_token = self.update_legal_actions()
                     info["api_completion_token"] = api_completion_token
                     # Lolo1222: DEBUG
-                    print('*'*80)
-                    print(f"Next legal_actions")
+                    logger.debug('*'*80)
+                    logger.debug(f"Next legal_actions")
                     for i, action in enumerate(self._legal_actions):
-                        print(f"Candidate action {i}: {action}")
+                        logger.debug(f"Candidate action {i}: {action}")
                     break
                 except NoLegalActionException as e:
                     if cnt == 3:

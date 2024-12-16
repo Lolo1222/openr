@@ -32,6 +32,15 @@ import jsonlines
 import tree
 import numpy as np
 from tqdm import tqdm
+
+# Import evaluate to ensure logging is configured
+import reason.evaluation.evaluate
+import logging
+
+# 获取全局 logger
+logger = logging.getLogger('reason.evaluation.evaluate')
+logger.setLevel(logging.DEBUG)
+
 if __name__ == "__main__":
 
     method_config = SimpleMCTSConfig(
@@ -44,8 +53,8 @@ if __name__ == "__main__":
             )    
     _, ds = get_train_test_dataset()
     print(len(ds))
-    print(ds[2])
-    problem = ds[2]
+    print(ds[1])
+    problem = ds[1]
     lm_call = VLLMRemoteCaller("mistral-7b-sft", "http://0.0.0.0:28777")
     env = Env(
         config={

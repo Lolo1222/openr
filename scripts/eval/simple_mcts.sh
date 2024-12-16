@@ -9,8 +9,9 @@ python reason/evaluation/evaluate.py \
     --tree_max_width 4 \
     --tree_max_depth 50 \
     --save_dir for_gen_result \
-    --method vanila_mcts \
+    --method simple_mcts \
     --num_worker 32 \
-    --controller_addr http://0.0.0.0:28777
+    --controller_addr http://0.0.0.0:28777\
+    --num_simulations 4
 
 # math-shepherd-mistral-7b-prm

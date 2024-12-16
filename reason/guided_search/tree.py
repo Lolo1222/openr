@@ -12,13 +12,16 @@ import torch
 import torch.nn as nn
 from typing import List, Dict, Any, Optional, Tuple, Union, Callable, Type
 from distributed.utils import print_rank_0, print_with_rank
-from envs.base_env import CoTEnv
+from envs.base_env import CoTEnv, NoLegalActionException
 import pdb
 from tqdm import tqdm
 import heapq
-from loguru import logger
-# from reason.guided_search.utils import is_similar_str_pair
+# from loguru import logger
+from reason.guided_search.utils import is_similar_str_pair
+import logging
 
+# 获取全局 logger
+logger = logging.getLogger('reason.evaluation.evaluate')
 
 class Node(object):
     """
@@ -218,10 +221,11 @@ class LanguageNode(Node):
     def merge_node(self, merged_node: Node):
         # 1. 计算合并后的value_sum
         # 由于_value_sum是protected,我们通过public的value和visit_count来计算
-        self._value_sum += merged_node.value * merged_node.visit_count
+        self._value_sum = max(self._value_sum, merged_node.value * merged_node.visit_count)
         
         # 2. 修改visit_count的更新 
-        self._visit_count += merged_node.visit_count
+        # 不更新visit_count, 因为merge在expand后调用，此时visit_count默认置1没有更新
+        # self._visit_count += merged_node.visit_count
         
         # 3. 可选的属性更新
         if hasattr(self, 'prm_value') and self.prm_value is not None:
@@ -395,8 +399,8 @@ class SearchTree:
             self._add_exploration_noise(node)
 
         for n in range(self._num_simulations):
-            # DEBUG
-            print("Simulate", n)
+            # Lolo1222: DEBUG
+            logger.debug(f"Simulate {n}")
             simulate_env_copy = simulate_env.copy()
             simulate_env_copy.battle_mode = simulate_env_copy.mcts_mode
             # The simulate tree is store through node. After one simulation, the 'node' may be a middle node.
@@ -526,8 +530,8 @@ class SearchTree:
             }
 
             # Lolo1222: DEBUG
-            print("*" * 80)
-            print(f"\ntraj_data is : {traj_data}")
+            logger.debug("*" * 80)
+            logger.debug(f"\ntraj_data is : {traj_data}")
             traj_list.append(traj_data)
 
             # reset api_call_completion_tokens
@@ -549,6 +553,7 @@ class SearchTree:
         if self.root is None:
             root = LanguageNode(text_state=simulate_env.get_state())
             self._expand_leaf_node(root, simulate_env, reward_model_fn)
+            self._merge_leaf_node(root)
             self.root = root
 
         traj_list = []
@@ -572,6 +577,7 @@ class SearchTree:
                 else:
                     node = LanguageNode(text_state=env_copy.get_state())
                     self._expand_leaf_node(node, env_copy, reward_model_fn)
+                    self._merge_leaf_node(node)
 
 
             traj_data = {
@@ -583,8 +589,8 @@ class SearchTree:
             }
 
             # Lolo1222: DEBUG
-            print("*" * 80)
-            print(f"\ntraj_data is : {traj_data}")
+            logger.debug("*" * 80)
+            logger.debug(f"\ntraj_data is : {traj_data}")
             traj_list.append(traj_data)
 
             # reset api_call_completion_tokens
@@ -825,6 +831,7 @@ class SearchTree:
             done = terminated or truncated
             if not done and node.is_leaf():
                 self._expand_leaf_node(node, simulate_env, reward_fn)
+                self._merge_leaf_node(node)
                 # XXX(Lolo1222): If don't break, it will expand the tree until get a terminal node, namely rollout.
                 break
 
@@ -839,10 +846,11 @@ class SearchTree:
             # means we reach a terminal node.
             # Dont need to backpropagate node's children's value.
             # Only backpropagate node's value.
-            value = reward_fn((simulate_env.question, simulate_env.answer))[-1]
+            # value = reward_fn((simulate_env.question, simulate_env.answer))[-1]
+
             node.set_as_terminate_node()
 
-            # value = node.value
+            value = node.value
             # value = reward_fn((simulate_env.question, simulate_env.answer+node.text_state or last_action)).item()
             node.update_recursive(value, mcts_mode="play_with_bot_mode")
 
@@ -893,12 +901,12 @@ class SearchTree:
         best_score = -9999999
 
         # Lolo1222: DEBUG
-        # print("*" * 80)
-        # print("Each ucb_score of Child nodes are:")
+        logger.debug("*" * 80)
+        logger.debug("Each ucb_score of Child nodes are:")
         for action_tmp, child_tmp in node.children.items():
             ucb_score = self._ucb_score(node, child_tmp)
             # Lolo1222: DEBUG
-            # print(f"ucb_score, child_tmp: {ucb_score}, {child_tmp}")
+            logger.debug(f"ucb_score, child_tmp: {ucb_score}, {child_tmp}")
             score = ucb_score
             if score > best_score:
                 best_score = score
@@ -908,10 +916,11 @@ class SearchTree:
         if child is None:
             child = node  # child==None, node is leaf node in play_with_bot_mode.
             # Lolo1222: DEBUG
-            print(f"Error:child==None, node is leaf node.")
+            logger.debug(f"Error:child==None, node is leaf node.")
         # Lolo1222: DEBUG
         else:
-            print(f"Choose child: {child}")
+            logger.debug(f"Choose child: {child}")
+            
 
         return action, child
 
@@ -927,7 +936,7 @@ class SearchTree:
 
 
     # Lolo1222: for merge similar node
-    def _merge_leaf_node(self, node: LanguageNode, metric='levenshtein_ratio'):
+    def _merge_leaf_node(self, node: LanguageNode, metric='levenshtein_ratio', threshold=0.95):
         # Lolo1222: TBD
         # get similar node pairs;
         # merge value and possibility
@@ -945,10 +954,10 @@ class SearchTree:
                     continue
                 key1 = keys[i]
                 key2 = keys[j]
-                if is_similar_str_pair(key1, key2,metric="model_cosine", threshold=0.98):
+                if is_similar_str_pair(key1, key2,metric=metric, threshold=threshold):
                     # Merge key2 into key1
                     node.children[key1].merge_node(node.children[key2])
-                    print(f"Merge key2 into key1! key1=<{key1}>, key2=<{key2}>")
+                    logger.debug(f"Merge key2 into key1! key1=<{key1}>, key2=<{key2}>")
                     merged.add(key2)
         
         # 移除已经合并的键
@@ -985,15 +994,24 @@ class SearchTree:
         else:
             leaf_value = node._initial_value
             assert len(simulate_env.legal_actions) > 0
-            prms = reward_fn(
-                question_answer_pairs=[
-                    (
+            cnt = 0
+            # Lolo1222: cnt is useless,now prms will be 0s if falied.
+            while cnt < 3:
+                cnt += 1
+                try:
+                    prms = reward_fn(
+                        question_answer_pairs=[
+                            (
                         simulate_env.question,
                         simulate_env.answer + x["action"],
                     )
                     for x in simulate_env.legal_actions
                 ]
-            )
+                )
+                    break
+                except NoLegalActionException as e:
+                    logger.warning(f"Error: {e}")
+                    continue
             child_values = []
             # PRM get last r as single reward
             for act, rs in zip(simulate_env.legal_actions, prms):

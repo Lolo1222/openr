@@ -26,7 +26,11 @@ def _value_inference_fastchat(
         json=gen_params,
         stream=True,
     )
-    # print('value response is : ', response)
     results = response.json()
-    value = results["value"]
+    try:
+        value = results["value"]
+    except Exception as e:
+        print('Error value response is : ', response)
+        print("gen_params is : ", gen_params)
+        value = [0 for _ in range(len(gen_params["input_str"]))]
     return value

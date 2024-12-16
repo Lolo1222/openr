@@ -26,7 +26,18 @@ from ray.util.actor_pool import ActorPool
 from reason.evaluation.methods import *
 import ray
 
+import logging
 
+# 配置 logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('debug/debug.log'),
+        logging.StreamHandler()
+    ]
+)
+
+logger = logging.getLogger(__name__)
 def setup_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -63,14 +74,18 @@ if __name__ == "__main__":
     # parallel config
     parser.add_argument("--local", action="store_true", default=False)
     parser.add_argument("--num_worker", type=int, default=32)
+    # simple mcts config
+    parser.add_argument("--num_simulations", type=int, default=3)
     config = parser.parse_args()
 
     setup_seed(config.seed)
     if config.local:
-        print("run in pure local mode for debug only")
+        logging.getLogger().setLevel(logging.DEBUG)
+        logger.debug("run in pure local mode for debug only")
         config.num_worker = 1
         ray.init(local_mode=True)
-
+    else:
+        logging.getLogger().setLevel(logging.INFO)
     # TODO(ziyu): move into some configuration file
     if "math-shepherd" in config.RM.lower():
         prm_step_tag = "ки\n"
@@ -216,6 +231,7 @@ if __name__ == "__main__":
             tree_max_width=config.tree_max_width,
             select_by_prior=False,
             num_path=config.num_sequence,
+            num_simulations=config.num_simulations,
         )
         solver_fn = partial(simple_mcts, method_config, gen_config)
     elif config.method == "rstar_mcts":
