@@ -231,6 +231,9 @@ class SimpleMCTSConfig(MCTSBaseConfig):
     select_by_prior: bool = False 
     num_path: int = 1
     num_simulations: int = 1
+    is_merge: bool = False
+    threshold: float = 0.95
+    metric: str = "levenshtein"
     
     def __post_init__(self):
         super().__post_init__()
@@ -280,7 +283,10 @@ def simple_mcts(
         simulate_env=env,
         num_path=config.num_path,
         reward_model_fn=rm_call_fn,
-        select_by_prior=config.select_by_prior
+        select_by_prior=config.select_by_prior,
+        is_merge=config.is_merge,
+        metric=config.metric,
+        threshold=config.threshold
     )
     return TreeSearchSolutionOutput(
         solutions=[t["text"] for t in traj_list],

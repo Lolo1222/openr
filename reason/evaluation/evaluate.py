@@ -76,6 +76,9 @@ if __name__ == "__main__":
     parser.add_argument("--num_worker", type=int, default=32)
     # simple mcts config
     parser.add_argument("--num_simulations", type=int, default=3)
+    parser.add_argument("--is_merge", action="store_true", default=False)
+    parser.add_argument("--threshold", type=float, default=0.95)
+    parser.add_argument("--metric", type=str, default="levenshtein")
     config = parser.parse_args()
 
     setup_seed(config.seed)
@@ -232,6 +235,9 @@ if __name__ == "__main__":
             select_by_prior=False,
             num_path=config.num_sequence,
             num_simulations=config.num_simulations,
+            is_merge=config.is_merge,
+            threshold=config.threshold,
+            metric=config.metric,
         )
         solver_fn = partial(simple_mcts, method_config, gen_config)
     elif config.method == "rstar_mcts":

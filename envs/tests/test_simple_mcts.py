@@ -39,7 +39,8 @@ import logging
 
 # 获取全局 logger
 logger = logging.getLogger('reason.evaluation.evaluate')
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 if __name__ == "__main__":
 

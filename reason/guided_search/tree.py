@@ -381,6 +381,9 @@ class SearchTree:
         temperature: int = 1.0,
         sample: bool = True,
         return_tree=False,
+        is_merge: bool = False,
+        metric: str = "levenshtein",
+        threshold: float = 0.95,
     ) -> Tuple[int, List[float]]:
         """
         Overview:
@@ -395,6 +398,8 @@ class SearchTree:
             - action (:obj:`Bool`): Select the action with the most visits as the final action.
             - action_probs (:obj:`List`): The output probability of each action.
         """
+        api_completion_token = 0
+
         if sample:
             self._add_exploration_noise(node)
 
@@ -404,7 +409,7 @@ class SearchTree:
             simulate_env_copy = simulate_env.copy()
             simulate_env_copy.battle_mode = simulate_env_copy.mcts_mode
             # The simulate tree is store through node. After one simulation, the 'node' may be a middle node.
-            self._simulate_4simple_mcts(node, simulate_env_copy, reward_fn)
+            api_completion_token += self._simulate_4simple_mcts(node, simulate_env_copy, reward_fn, is_merge, metric, threshold)
 
         action_visits = []
         for action_dict in simulate_env.legal_actions:
@@ -430,7 +435,7 @@ class SearchTree:
 
         if return_tree:
             return action, action_probs, self.root
-        return action, action_probs
+        return action, action_probs, api_completion_token
 
     # Lolo1222: Best of N (step level)
     def vanila_mcts(
@@ -545,6 +550,9 @@ class SearchTree:
         num_path: int,
         reward_model_fn: Optional[Callable] = None,
         select_by_prior: bool = False,
+        is_merge: bool = False,
+        metric: str = "levenshtein",
+        threshold: float = 0.95
     ) -> List[Dict]:
         """Notice: DONT calculate true api_call_completion_tokens"""
         api_call_completion_tokens = 0
@@ -553,7 +561,8 @@ class SearchTree:
         if self.root is None:
             root = LanguageNode(text_state=simulate_env.get_state())
             self._expand_leaf_node(root, simulate_env, reward_model_fn)
-            self._merge_leaf_node(root)
+            if is_merge:
+                self._merge_leaf_node(root, metric, threshold)
             self.root = root
 
         traj_list = []
@@ -563,13 +572,15 @@ class SearchTree:
             env_copy = simulate_env.copy()
            
             for i_step in range(env_copy.config["max_length"]):
-                step_text, _ = self.get_next_step(node, env_copy, reward_model_fn, temperature=1.0, sample=False, return_tree=False )
+                step_text, _, api_completion_token = self.get_next_step(node, env_copy, reward_model_fn, temperature=1.0, sample=False, return_tree=False, is_merge=is_merge, metric=metric, threshold=threshold)
+                api_call_completion_tokens += api_completion_token
                 env_copy._next_state_terminated = {}
                 env_copy._next_state_terminated[step_text] = node.children[step_text].terminated
 
                 _, _, terminated, truncated, info = env_copy.step(
                     step_text, update_legal_action=True
                 )
+                api_call_completion_tokens += info["api_completion_token"]
 
                 done = terminated or truncated
                 if done:
@@ -577,7 +588,8 @@ class SearchTree:
                 else:
                     node = LanguageNode(text_state=env_copy.get_state())
                     self._expand_leaf_node(node, env_copy, reward_model_fn)
-                    self._merge_leaf_node(node)
+                    if is_merge:
+                        self._merge_leaf_node(node, metric, threshold)
 
 
             traj_data = {
@@ -804,6 +816,9 @@ class SearchTree:
         node: Node,
         simulate_env: Type[CoTEnv],
         reward_fn: Optional[Callable] = None,
+        is_merge: bool = False,
+        metric: str = "levenshtein",
+        threshold: float = 0.95
     ) -> None:
         """
         Overview:
@@ -816,6 +831,7 @@ class SearchTree:
         """
         winner = None
         done = False
+        api_completion_token = 0
         # 'node' is leaf or middle node, leaf->first simulation, middle->after several simulations
         # while not node.is_leaf() is True, the node is middle node, we first down to a leaf node.
         while not node.is_leaf() and not done:
@@ -828,10 +844,12 @@ class SearchTree:
             _, _, terminated, truncated, info = simulate_env.step(
                 action, update_legal_action=(node.is_leaf() and node.visit_count == 1)
             )
+            api_completion_token += info["api_completion_token"]
             done = terminated or truncated
             if not done and node.is_leaf():
                 self._expand_leaf_node(node, simulate_env, reward_fn)
-                self._merge_leaf_node(node)
+                if is_merge:
+                    self._merge_leaf_node(node, metric, threshold)
                 # XXX(Lolo1222): If don't break, it will expand the tree until get a terminal node, namely rollout.
                 break
 
@@ -843,19 +861,19 @@ class SearchTree:
                 # print(child.value, child.visit_count)
                 node.update_recursive(child.value, mcts_mode="play_with_bot_mode")
         else:
-            # means we reach a terminal node.
-            # Dont need to backpropagate node's children's value.
+            # Means that we reach a terminal node.
+            # Don't need to backpropagate node's children's value.
             # Only backpropagate node's value.
             # value = reward_fn((simulate_env.question, simulate_env.answer))[-1]
 
             node.set_as_terminate_node()
-
             value = node.value
-            # value = reward_fn((simulate_env.question, simulate_env.answer+node.text_state or last_action)).item()
             node.update_recursive(value, mcts_mode="play_with_bot_mode")
 
+        return api_completion_token
+
     def _rollout_and_backprop(self, node: Node, simulate_env: Type[CoTEnv], reward_fn: Optional[Callable] = None, simulate_child_num: int = 1):
-        """For simple MCTS
+        """For simple MCTS, no use.
         Use prm value to estimate rollout value.
         Need to approx each child's value of the give node.
         Simulate a child selected to Pseudo-expand for updating value by the prior probability """
