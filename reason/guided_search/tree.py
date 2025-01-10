@@ -919,12 +919,12 @@ class SearchTree:
         best_score = -9999999
 
         # Lolo1222: DEBUG
-        logger.debug("*" * 80)
-        logger.debug("Each ucb_score of Child nodes are:")
+        # logger.debug("*" * 80)
+        # logger.debug("Each ucb_score of Child nodes are:")
         for action_tmp, child_tmp in node.children.items():
             ucb_score = self._ucb_score(node, child_tmp)
             # Lolo1222: DEBUG
-            logger.debug(f"ucb_score, child_tmp: {ucb_score}, {child_tmp}")
+            # logger.debug(f"ucb_score, child_tmp: {ucb_score}, {child_tmp}")
             score = ucb_score
             if score > best_score:
                 best_score = score
@@ -937,7 +937,8 @@ class SearchTree:
             logger.debug(f"Error:child==None, node is leaf node.")
         # Lolo1222: DEBUG
         else:
-            logger.debug(f"Choose child: {child}")
+            pass
+            # logger.debug(f"Choose child: {child}")
             
 
         return action, child

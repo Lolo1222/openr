@@ -29,15 +29,37 @@ import ray
 import logging
 
 # 配置 logging
+# 创建处理器
+file_handler = logging.FileHandler('/data1/home/jiawei/llmmcts/openr/logs_terminal/mathtrain6500_simple_mcts_qwen_mprm_width10.log')
+file_handler.setLevel(logging.DEBUG)  # 文件处理器接收 DEBUG 及以上级别
+
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.WARNING)  # 控制台处理器只接收 INFO 及以上级别
+
 logging.basicConfig(
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('debug/debug.log'),
-        logging.StreamHandler()
+        file_handler,  # 文件处理器
+        console_handler  # 控制台处理器
     ]
 )
-
 logger = logging.getLogger(__name__)
+logging.getLogger('urllib3').setLevel(logging.INFO)
+logging.getLogger('filelock').setLevel(logging.INFO)
+
+# 配置 logging
+# logging.basicConfig(
+#     level=logging.DEBUG,  # 设置根logger的级别为DEBUG
+#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+#     handlers=[
+#         logging.FileHandler('logs_terminal/mathtrain6500_simple_mcts_qwen_mprm_width10.log', encoding='utf-8'),  # 文件处理器
+#         logging.StreamHandler()  # 控制台处理器
+#     ]
+# )
+
+# logger = logging.getLogger(__name__)
+# logging.getLogger().setLevel(logging.DEBUG)  # 确保该logger的级别为DEBUG
 def setup_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -88,6 +110,8 @@ if __name__ == "__main__":
         config.num_worker = 1
         ray.init(local_mode=True)
     else:
+        ###########Notice!!!!!!!!!!!!!!!!!!!
+        # logging.getLogger().setLevel(logging.DEBUG)
         logging.getLogger().setLevel(logging.INFO)
     # TODO(ziyu): move into some configuration file
     if "math-shepherd" in config.RM.lower():

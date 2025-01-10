@@ -276,6 +276,7 @@ def simple_mcts(
             "pb_c_base": config.pb_c_base,
             "pb_c_init": config.pb_c_init,
             "init_critic_value": config.init_critic_value,
+            "num_simulations": config.num_simulations
         }
     )
     rm_call_fn = functools.partial(rm_call, lm_step_tag=lm_call.lm_step_tag)
