@@ -152,7 +152,8 @@ class CoTEnv(BaseEnv):
                     logger.debug('*'*80)
                     logger.debug(f"Initialize legal_actions")
                     for i, action in enumerate(self._legal_actions):
-                        logger.debug(f"Candidate action {i}: {action}")
+                        escaped_action = action['action'].replace('\n', '\\n')
+                        logger.debug(f"Candidate action {i}: {escaped_action}")
                     break
                 except NoLegalActionException as e:
                     if cnt == 3:
@@ -177,7 +178,8 @@ class CoTEnv(BaseEnv):
                     logger.debug('*'*80)
                     logger.debug(f"Next legal_actions")
                     for i, action in enumerate(self._legal_actions):
-                        logger.debug(f"Candidate action {i}: {action}")
+                        escaped_action = action['action'].replace('\n', '\\n')
+                        logger.debug(f"Candidate action {i}: {escaped_action}")
                     break
                 except NoLegalActionException as e:
                     if cnt == 3:

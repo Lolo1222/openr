@@ -42,7 +42,7 @@ logger = logging.getLogger('reason.evaluation.evaluate')
 logger.setLevel(logging.DEBUG)
 # logger.setLevel(logging.INFO)
 # 创建文件处理器
-file_handler = logging.FileHandler('logs_terminal/mathtrain6500_simple_mcts_qwen_mprm_width10.py.log')
+file_handler = logging.FileHandler('logs_terminal/debug.log')
 file_handler.setLevel(logging.DEBUG)
 
 # 创建格式化器
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     method_config = SimpleMCTSConfig(
                 task_name='MATH',
                 tree_max_depth=50,
-                tree_max_width=10,
+                tree_max_width=4,
                 select_by_prior=False,
                 num_path=1,
                 num_simulations=4,

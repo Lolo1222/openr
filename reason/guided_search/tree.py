@@ -35,8 +35,10 @@ class Node(object):
         self._parent = parent
         self._children = {}
         # XXX(Lolo1222): set visit_count to 1 for new child node.
-        self._visit_count = 1
-        self._value_sum = initial_value
+        # 01/13: set visit_count to 0 for new child node.
+        self._visit_count = 0
+        # 01/13: change self._value_sum from initial_value to 0.0
+        self._value_sum = 0.0
         self.prior_p = prior_p
         self.prior_p_ori = prior_p
 
@@ -61,9 +63,10 @@ class Node(object):
         Returns:
             - output (:obj:`Int`): Current value, used to compute ucb score.
         """
-        # if self._visit_count == 1:
-        #     # if not visited, return the initial value
-        #     return self._initial_value
+        # 01/13:
+        if self._visit_count == 0:
+            # if not visited, return the initial value
+            return self._initial_value
         return self._value_sum / self._visit_count
 
     def update(self, value: float) -> None:
@@ -408,17 +411,26 @@ class SearchTree:
             logger.debug(f"Simulate {n}")
             simulate_env_copy = simulate_env.copy()
             simulate_env_copy.battle_mode = simulate_env_copy.mcts_mode
-            # The simulate tree is store through node. After one simulation, the 'node' may be a middle node.
+            # The simulate tree is stored through node. After one simulation, the 'node' may be a middle node.
             api_completion_token += self._simulate_4simple_mcts(node, simulate_env_copy, reward_fn, is_merge, metric, threshold)
 
         action_visits = []
-        for action_dict in simulate_env.legal_actions:
-            # 'action' is the text_state of the next step
-            action = action_dict["action"]
-            if action in node.children:
-                action_visits.append((action, node.children[action].visit_count))
-            else:
-                action_visits.append((action, 0))
+        # 01/13: simulate_env.legal_actions may be None if current node is subtree,
+        # see reason/guided_search/tree.py#L594
+        # _, _, terminated, truncated, info = env_copy.step(
+                #     step_text, update_legal_action=step_node.is_leaf()
+                # )
+        # Before:
+        # for action_dict in simulate_env.legal_actions:
+        #     # 'action' is the text_state of the next step
+        #     action = action_dict["action"]
+        #     if action in node.children:
+        #         action_visits.append((action, node.children[action].visit_count))
+        #     else:
+        #         action_visits.append((action, 0))
+        # After:
+        for action, child_node in node.children.items():
+            action_visits.append((action, child_node.visit_count))        
 
         actions, visits = zip(*action_visits)
         action_probs = nn.functional.softmax(
@@ -433,9 +445,15 @@ class SearchTree:
         else:
             action = actions[np.argmax(action_probs)]
 
-        if return_tree:
-            return action, action_probs, self.root
-        return action, action_probs, api_completion_token
+        # 01/13: get action_node
+        if action not in node.children:
+            raise AssertionError(f"Action {action} not found in node's children")
+        action_node = node.children[action]
+        # 01/13: comment if return_tree branch
+        # if return_tree:
+        #     return action, action_probs, self.root
+        # 01/13: return action_node rather than action_probs to get the chosen subtree info.
+        return action, action_node, api_completion_token
 
     # Lolo1222: Best of N (step level)
     def vanila_mcts(
@@ -572,13 +590,17 @@ class SearchTree:
             env_copy = simulate_env.copy()
            
             for i_step in range(env_copy.config["max_length"]):
-                step_text, _, api_completion_token = self.get_next_step(node, env_copy, reward_model_fn, temperature=1.0, sample=False, return_tree=False, is_merge=is_merge, metric=metric, threshold=threshold)
+                # 01/13: receive step_node
+                step_text, step_node, api_completion_token = self.get_next_step(node, env_copy, reward_model_fn, temperature=1.0, sample=False, return_tree=False, is_merge=is_merge, metric=metric, threshold=threshold)
+                escaped_step_text = step_text.replace('\n', '\\n')
+                logger.debug(f"Step {i_step}, choose next step:{escaped_step_text}")
                 api_call_completion_tokens += api_completion_token
                 env_copy._next_state_terminated = {}
                 env_copy._next_state_terminated[step_text] = node.children[step_text].terminated
 
+                # 01/13: the env only update_legal_action when step_node.is_leaf() is True
                 _, _, terminated, truncated, info = env_copy.step(
-                    step_text, update_legal_action=True
+                    step_text, update_legal_action=step_node.is_leaf()
                 )
                 api_call_completion_tokens += info["api_completion_token"]
 
@@ -586,10 +608,13 @@ class SearchTree:
                 if done:
                     break
                 else:
-                    node = LanguageNode(text_state=env_copy.get_state())
-                    self._expand_leaf_node(node, env_copy, reward_model_fn)
-                    if is_merge:
-                        self._merge_leaf_node(node, metric, threshold)
+                    # 01/13: use returned step_node rather than initial a new node to use subtree.
+                    # node = LanguageNode(text_state=env_copy.get_state())
+                    node = step_node
+                    if step_node.is_leaf():
+                        self._expand_leaf_node(node, env_copy, reward_model_fn)
+                        if is_merge:
+                            self._merge_leaf_node(node, metric, threshold)
 
 
             traj_data = {
@@ -841,8 +866,9 @@ class SearchTree:
             assert node.last_action == action
             simulate_env._next_state_terminated[action] = node.terminated
 
+            # 01/13: change update condition node.visit_count to 0.
             _, _, terminated, truncated, info = simulate_env.step(
-                action, update_legal_action=(node.is_leaf() and node.visit_count == 1)
+                action, update_legal_action=(node.is_leaf() and node.visit_count == 0)
             )
             api_completion_token += info["api_completion_token"]
             done = terminated or truncated
@@ -856,10 +882,13 @@ class SearchTree:
         if not done:
             # means we reach a leaf node, and we've expanded it.
             # we need to calculate the leaf_value of this node.
-            for action, child in node.children.items():
-                # mcts_mode should be "play_with_bot_mode". Need to check simulate_env.mcts_mode.
-                # print(child.value, child.visit_count)
-                node.update_recursive(child.value, mcts_mode="play_with_bot_mode")
+            # for action, child in node.children.items():
+            #     # mcts_mode should be "play_with_bot_mode". Need to check simulate_env.mcts_mode.
+            #     # print(child.value, child.visit_count)
+            #     node.update_recursive(child.value, mcts_mode="play_with_bot_mode")
+            # 01/13: Dont backup its children since ther are not reached. Only backpropagate node's value.
+            value = node.value
+            node.update_recursive(value, mcts_mode="play_with_bot_mode")            
         else:
             # Means that we reach a terminal node.
             # Don't need to backpropagate node's children's value.
@@ -919,12 +948,14 @@ class SearchTree:
         best_score = -9999999
 
         # Lolo1222: DEBUG
-        # logger.debug("*" * 80)
-        # logger.debug("Each ucb_score of Child nodes are:")
+        logger.debug("*" * 80)
+        logger.debug("Each ucb_score of Child nodes are:")
         for action_tmp, child_tmp in node.children.items():
             ucb_score = self._ucb_score(node, child_tmp)
             # Lolo1222: DEBUG
-            # logger.debug(f"ucb_score, child_tmp: {ucb_score}, {child_tmp}")
+            # logger.debug(f"ucb_score: {ucb_score}")
+            escaped_action = child_tmp.last_action.replace('\n', '\\n')
+            logger.debug(f"ucb_score: {ucb_score}, action: {escaped_action}, value: {child_tmp.value}, prior: {child_tmp.prior_p}")
             score = ucb_score
             if score > best_score:
                 best_score = score
@@ -937,8 +968,9 @@ class SearchTree:
             logger.debug(f"Error:child==None, node is leaf node.")
         # Lolo1222: DEBUG
         else:
-            pass
-            # logger.debug(f"Choose child: {child}")
+            # pass
+            escaped_action = child.last_action.replace('\n', '\\n')
+            logger.debug(f"Choose child: {escaped_action}")
             
 
         return action, child
