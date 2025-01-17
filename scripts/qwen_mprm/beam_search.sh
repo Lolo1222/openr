@@ -6,7 +6,7 @@ python reason/evaluation/evaluate.py \
     --temperature 0.7 \
     --max_new_tokens 2048 \
     --num_sequence 4 \
-    --tree_max_width 4 \
+    --tree_max_width 10 \
     --tree_max_depth 50 \
     --save_dir qwen_mprm_result \
     --method beam_search \

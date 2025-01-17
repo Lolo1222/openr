@@ -1,11 +1,11 @@
 export PYTHONPATH=$(pwd)
 
 python reason/evaluation/evaluate.py \
-    --LM mistral-7b-sft \
+    --LM Qwen2.5-Math-7B-Instruct \
     --task_name MATH \
     --temperature 0.0 \
     --max_new_tokens 1024 \
-    --save_dir math_shepherd_result \
+    --save_dir qwen_qwenprm_result \
     --method cot \
     --num_worker 32 \
     --controller_addr http://0.0.0.0:28777

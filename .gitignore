@@ -11,6 +11,7 @@ results/
 _build/
 hf_models/
 *.jsonl
+*.json
 ./envs/MATH/latex2sympy/
 debug
 new_result/

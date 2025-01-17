@@ -48,7 +48,7 @@ def parse_log(log_content: str) -> Node:
         simulate_match = simulate_pattern.search(line)
         if simulate_match:
             current_simulation += 1
-            current_parent = previous_parent
+            current_parent = real_parent
             print(f"\nStarting simulation {current_simulation}...")
             continue
         
@@ -66,11 +66,12 @@ def parse_log(log_content: str) -> Node:
                 # exit(-1)
             
             # 更新当前父节点为选择的节点
+            current_parent.children[node_id].is_final_choice = True
             current_parent = current_parent.children[node_id]
             previous_parent = current_parent
             real_parent = current_parent
             current_path.append(current_parent)
-            print(f"\nChose final step: {chosen_step[:50]}...")
+            print(f"\nChose final step: {chosen_step}")
             continue
             
         # 处理候选动作
@@ -90,7 +91,8 @@ def parse_log(log_content: str) -> Node:
                     # prior=float(prob)
                 )
                 current_parent.children[node_id] = node
-                print(f"Added candidate: {short_action[:100]}...")
+                print(f"Added candidate: {action}")
+                # print(f"Added candidate: {short_action[:100]}...")
                 # print(f"Added candidate under {current_parent.action[:100]}: {short_action[:100]}...")
         
         # 更新节点的UCB值
@@ -105,9 +107,10 @@ def parse_log(log_content: str) -> Node:
                 node.value = float(value)
                 node.ucb_score = float(ucb_score)
                 node.prior = float(prior)
-                print(f"Updated UCB for: {action[:100]}...")
+                print(f"Updated UCB for: {action}")
+                # print(f"Updated UCB for: {action[:100]}...")
             else:
-                print("error in node match")
+                print(f"error in node match:{action}")
                 # exit(-1)
         
         # 处理模拟过程中的选择
@@ -120,7 +123,8 @@ def parse_log(log_content: str) -> Node:
             if node_id in current_parent.children:
                 previous_parent = current_parent
                 current_parent = current_parent.children[node_id]
-                print(f"Simulation chose: {chosen_action[:100]}...")
+                print(f"Simulation chose: {chosen_action}")
+                # print(f"Simulation chose: {chosen_action[:100]}...")
     
     return root
 

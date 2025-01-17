@@ -15,7 +15,7 @@ VALUE_MODEL_NAME=peiyi9979/math-shepherd-mistral-7b-prm
 
 # Change MODEL_BASE POLICY_MODEL_NAME VALUE_MODEL_NAME
 MODEL_BASE=/data2/OpenLLMs
-CUDA_DEVICE_BASE=3
+CUDA_DEVICE_BASE=4
 # POLICY_MODEL_NAME=Qwen2.5-Math-7B-Instruct
 # VALUE_MODEL_NAME=Qwen2.5-Math-1.5B-Instruct
 MODEL_PATH=$MODEL_BASE/$POLICY_MODEL_NAME
@@ -28,8 +28,8 @@ tmux new-session -s fastchat2 -n controller -d
 tmux send-keys "export LOGDIR=${LOGDIR}" Enter
 tmux send-keys "$PYTHON_EXECUTABLE -m fastchat.serve.controller --port ${CONTROLER_PORT} --host $HOST_ADDR" Enter
 
-NUM_LM_WORKER=2
-NUM_RM_WORKER=3
+NUM_LM_WORKER=3
+NUM_RM_WORKER=1
 # NUM_LM_WORKER=2
 # NUM_RM_WORKER=2
 
@@ -40,7 +40,7 @@ echo "Starting workers"
 # ... existing code ...
 
 # 定义GPU设备ID数组，要和NUM_LM_WORKER=？一致
-CUDA_DEVICES="1 3"  # 比如在GPU 0和GPU 2上运行
+CUDA_DEVICES="4 5 6"  # 比如在GPU 0和GPU 2上运行
 
 echo "Starting workers"
 for i in $(seq 0 $((NUM_LM_WORKER-1)))
@@ -66,7 +66,7 @@ done
 
 
 # start value service
-value_CUDA_DEVICES="4 5 7"  # 比如在GPU 0和GPU 2上运行
+value_CUDA_DEVICES="7"  # 比如在GPU 0和GPU 2上运行
 for i in $(seq 0 $((NUM_RM_WORKER-1)))
 do
   # WORKER_PORT=$((WORKER_BASE_PORT+i))

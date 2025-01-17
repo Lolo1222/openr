@@ -30,8 +30,9 @@ import logging
 
 # 配置 logging
 # 创建处理器
-file_handler = logging.FileHandler('logs_terminal/mathtrain6500_simple_mcts_qwen_mprm_width10.log')
-file_handler.setLevel(logging.DEBUG)  # 文件处理器接收 DEBUG 及以上级别
+file_handler = logging.FileHandler('logs_terminal/math500_vmcts_qwen_mprm_width10.log')
+file_handler.setLevel(logging.INFO)  # 文件处理器接收 DEBUG 及以上级别
+# file_handler.setLevel(logging.DEBUG)  # 文件处理器接收 DEBUG 及以上级别
 
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.WARNING)  # 控制台处理器只接收 INFO 及以上级别

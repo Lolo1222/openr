@@ -7,8 +7,8 @@ def get_train_test_dataset(*args, **kwargs):
     env_dir = Path(__file__).parent
     # test_ds = JsonlMathDataset(env_dir / "dataset/test2.jsonl")
     # test_ds = JsonlMathDataset(env_dir / "dataset/for_gen.jsonl")
-    test_ds = JsonlMathDataset(env_dir / "dataset/train.jsonl")
-    # test_ds = JsonlMathDataset(env_dir / "dataset/test500.jsonl")
+    # test_ds = JsonlMathDataset(env_dir / "dataset/train.jsonl")
+    test_ds = JsonlMathDataset(env_dir / "dataset/test500.jsonl")
     train_ds = JsonlMathDataset(env_dir / "dataset/train.jsonl")
     return train_ds, test_ds
 
