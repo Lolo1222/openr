@@ -12,7 +12,6 @@ python reason/evaluation/evaluate.py \
     --method simple_mcts \
     --num_worker 32 \
     --controller_addr http://0.0.0.0:28777\
-    --num_simulations 20 \
-    --is_merge
+    --num_simulations 20
 
 # math-shepherd-mistral-7b-prm

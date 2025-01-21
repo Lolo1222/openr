@@ -281,6 +281,7 @@ def simple_mcts(
     )
     rm_call_fn = functools.partial(rm_call, lm_step_tag=lm_call.lm_step_tag)
     traj_list = search_tree.simple_mcts(
+    # traj_list, candidate_list = search_tree.simple_mcts(
         simulate_env=env,
         num_path=config.num_path,
         reward_model_fn=rm_call_fn,

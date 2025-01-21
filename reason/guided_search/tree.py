@@ -576,6 +576,7 @@ class SearchTree:
         api_call_completion_tokens = 0
         _, info = simulate_env.reset(update_legal_action=True)
         api_call_completion_tokens += info["api_completion_token"]
+        # candidate_list = []
         if self.root is None:
             root = LanguageNode(text_state=simulate_env.get_state())
             self._expand_leaf_node(root, simulate_env, reward_model_fn)
@@ -633,6 +634,7 @@ class SearchTree:
             # reset api_call_completion_tokens
             api_call_completion_tokens = 0
 
+        # return traj_list, candidate_list
         return traj_list
 
     def beam_search(

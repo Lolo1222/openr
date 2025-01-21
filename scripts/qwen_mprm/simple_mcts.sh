@@ -12,6 +12,7 @@ python reason/evaluation/evaluate.py \
     --method simple_mcts \
     --num_worker 32 \
     --num_simulations 20 \
+    --is_merge \
     --controller_addr http://0.0.0.0:28777
 # python reason/evaluation/evaluate.py \
 #     --LM Qwen2.5-Math-7B-Instruct \

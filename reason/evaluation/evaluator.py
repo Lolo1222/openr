@@ -28,6 +28,10 @@ class Task:
             self.extract_answer = task_module.extract_answer
             self.extract_groundtruth = task_module.extract_groundtruth
             self.judge_correct = task_module.judge_correct
+        elif task_name == "GSM8K":
+            self.extract_answer = task_module.extract_answer
+            self.extract_groundtruth = task_module.extract_groundtruth
+            self.judge_correct = task_module.judge_correct
         else:
             raise NotImplementedError(f"Task {task_name} is not supported")
 
@@ -121,6 +125,7 @@ class MathEvaluator:
         self, problem_inst: Dict[str, str], solver_fn: Callable
     ) -> List[str]:
         solution: SolutionOutput = solver_fn(problem_inst, self.lm_call, self.rm_call)
+        # solution: SolutionOutput, Candidate_list = solver_fn(problem_inst, self.lm_call, self.rm_call)
         result, output = self.analyze_output(problem_inst, solution.solutions)
         total_completion_token = 0
         for i, o in enumerate(output):
@@ -132,6 +137,7 @@ class MathEvaluator:
             total_completion_token += solution.completion_tokens[i]
         result["total_completion_tokens"] = total_completion_token
         return problem_inst, result, output
+        # return problem_inst, result, output, candidate_list
 
     def analyze_output(self, problem_inst: Dict[str, str], gen_answers: List[str]):
         try:

@@ -193,10 +193,18 @@ if __name__ == "__main__":
         )       # Distributes tasks from the test_ds dataset across the worker pool asynchronously and
                 # collects results in any order as they complete. Every worker has a new searching tree as we reset the
                 # tree in solver_fn
+        # output_dir = "output_files"
+        # os.makedirs(output_dir, exist_ok=True)                
         for i, (problem_inst, result, output) in enumerate(
+        # for i, (problem_inst, result, output, candidate_list) in enumerate(
             tqdm(res_q, total=len(test_ds))
         ):
             results.append(result)
+            # output_file = os.path.join(output_dir, f"question_{i}.json")
+            # with open(output_file, 'w') as f:
+            #     json.dump(candidate_list, f)
+            # with open(output_file, 'r') as f:
+            #     loaded_data = json.load(f)                
             if record_writer:
                 obj = {
                     # "i": i,
